@@ -480,3 +480,90 @@ def chat_with_invoice(invoice_data: Dict[str, Any], user_question: str) -> str:
         
     except Exception as e:
         return f"Sorry, I encountered an error while processing your question: {str(e)}. Please try again."
+
+
+def generate_suggested_questions(invoice_data: Dict[str, Any]) -> List[str]:
+    """Generate dynamic suggested questions based on the invoice content"""
+    try:
+        # Prepare the context with invoice data
+        invoice_context = {
+            "invoice_number": invoice_data.get("invoice_number"),
+            "invoice_date": invoice_data.get("invoice_date"),
+            "due_date": invoice_data.get("due_date"),
+            "vendor_name": invoice_data.get("vendor_name"),
+            "vendor_address": invoice_data.get("vendor_address"),
+            "customer_name": invoice_data.get("customer_name"),
+            "customer_address": invoice_data.get("customer_address"),
+            "subtotal": invoice_data.get("subtotal"),
+            "tax_amount": invoice_data.get("tax_amount"),
+            "total_amount": invoice_data.get("total_amount"),
+            "currency": invoice_data.get("currency"),
+            "line_items": invoice_data.get("line_items", []),
+            "validation": invoice_data.get("validation", {})
+        }
+        
+        system_prompt = """You are an expert invoice analyst. Based on the provided invoice data, generate 5-7 relevant and specific questions that users might want to ask about this invoice.
+
+        Focus on:
+        - Specific details from the invoice (vendor, amounts, dates, line items)
+        - Financial analysis (totals, taxes, calculations)
+        - Data quality issues (discrepancies, validation issues)
+        - Business insights (payment terms, vendor relationships)
+        
+        Make questions specific to the actual data present. If certain data is missing, don't suggest questions about it.
+        
+        Return ONLY a JSON array of question strings. Do not include any explanatory text."""
+        
+        context_prompt = f"""Invoice Data:
+        {json.dumps(invoice_context, indent=2)}
+        
+        Generate 5-7 specific questions based on this invoice data."""
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=context_prompt)
+        ]
+        
+        response = groq_client.invoke(messages)
+        
+        # Parse the response to extract questions
+        try:
+            # Try to extract JSON from the response
+            questions_text = extract_json_from_response(response.content)
+            if isinstance(questions_text, list):
+                return questions_text
+            else:
+                # Fallback: try to parse as a simple list
+                lines = response.content.strip().split('\n')
+                questions = []
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('-') or line.startswith('•') or line.startswith('*'):
+                        question = line[1:].strip()
+                        if question and not question.startswith('[') and not question.startswith('{'):
+                            questions.append(question)
+                    elif line and not line.startswith('[') and not line.startswith('{') and not line.startswith('```'):
+                        questions.append(line)
+                
+                return questions[:7]  # Limit to 7 questions
+        except Exception as e:
+            print(f"Error parsing suggested questions: {e}")
+            # Return default questions if parsing fails
+            return [
+                "What is the total amount of this invoice?",
+                "Who is the vendor?",
+                "When is the due date?",
+                "What are the line items?",
+                "Are there any discrepancies in the data?"
+            ]
+        
+    except Exception as e:
+        print(f"Error generating suggested questions: {e}")
+        # Return default questions if generation fails
+        return [
+            "What is the total amount of this invoice?",
+            "Who is the vendor?",
+            "When is the due date?",
+            "What are the line items?",
+            "Are there any discrepancies in the data?"
+        ]

@@ -65,6 +65,23 @@ export const invoiceApi = {
       throw error;
     }
   },
+
+  // Get suggested questions for invoice
+  getSuggestedQuestions: async (invoiceId: number): Promise<{ questions: string[]; invoice_id: number }> => {
+    try {
+      console.log('Fetching suggested questions for invoice:', invoiceId);
+      const response = await api.post(`/invoices/${invoiceId}/suggest-questions`);
+      console.log('Suggested questions received:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Suggested questions API error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Response data:', error.response?.data);
+        console.error('Response status:', error.response?.status);
+      }
+      throw error;
+    }
+  },
 };
 
 export default api;

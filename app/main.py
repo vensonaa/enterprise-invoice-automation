@@ -12,7 +12,7 @@ import uvicorn
 
 from app.database import get_db, Invoice
 from app.database import SessionLocal
-from app.langgraph_workflow import extract_invoice_data, chat_with_invoice
+from app.langgraph_workflow import extract_invoice_data, chat_with_invoice, generate_suggested_questions
 from pydantic import BaseModel
 
 app = FastAPI(title="Invoice Automation API", version="1.0.0")
@@ -76,6 +76,10 @@ class ChatResponse(BaseModel):
     response: str
     invoice_id: int
     timestamp: datetime
+
+class SuggestedQuestionsResponse(BaseModel):
+    questions: List[str]
+    invoice_id: int
 
 @app.on_event("startup")
 def mark_stale_processing_invoices():
@@ -352,6 +356,28 @@ async def chat_with_invoice_endpoint(chat_message: ChatMessage, db: Session = De
         response=ai_response,
         invoice_id=chat_message.invoice_id,
         timestamp=datetime.utcnow()
+    )
+
+@app.post("/invoices/{invoice_id}/suggest-questions", response_model=SuggestedQuestionsResponse)
+async def get_suggested_questions(invoice_id: int, db: Session = Depends(get_db)):
+    """Get suggested questions for a specific invoice."""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if invoice.status != "completed":
+        raise HTTPException(status_code=400, detail="Invoice processing not completed. Please wait for processing to finish.")
+
+    try:
+        extracted_data = json.loads(invoice.extracted_data) if invoice.extracted_data else {}
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid invoice data format")
+
+    questions = generate_suggested_questions(extracted_data)
+
+    return SuggestedQuestionsResponse(
+        questions=questions,
+        invoice_id=invoice_id
     )
 
 @app.get("/", response_class=HTMLResponse)

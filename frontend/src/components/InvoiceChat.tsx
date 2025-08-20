@@ -32,6 +32,8 @@ const InvoiceChat: React.FC<InvoiceChatProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -47,12 +49,35 @@ const InvoiceChat: React.FC<InvoiceChatProps> = ({
       // Add welcome message when chat opens
       setMessages([{
         id: 'welcome',
-        text: `Hello! I'm your AI assistant for "${invoiceName}". You can ask me questions about this invoice, such as:\n\n• What's the total amount?\n• Who is the vendor?\n• What are the line items?\n• When is the due date?\n• Are there any discrepancies?\n\nHow can I help you today?`,
+        text: `Hello! I'm your AI assistant for "${invoiceName}". I can help you analyze this invoice and answer any questions you have about it.`,
         isUser: false,
         timestamp: new Date()
       }]);
+      
+      // Fetch suggested questions
+      fetchSuggestedQuestions();
     }
-  }, [isOpen, invoiceName]);
+  }, [isOpen, invoiceName, invoiceId]);
+
+  const fetchSuggestedQuestions = async () => {
+    setIsLoadingQuestions(true);
+    try {
+      const response = await invoiceApi.getSuggestedQuestions(invoiceId);
+      setSuggestedQuestions(response.questions);
+    } catch (error) {
+      console.error('Error fetching suggested questions:', error);
+      // Fallback to default questions
+      setSuggestedQuestions([
+        "What is the total amount of this invoice?",
+        "Who is the vendor?",
+        "When is the due date?",
+        "What are the line items?",
+        "Are there any discrepancies?"
+      ]);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -95,6 +120,10 @@ const InvoiceChat: React.FC<InvoiceChatProps> = ({
     }
   };
 
+  const handleSuggestedQuestion = (question: string) => {
+    setInputMessage(question);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -106,105 +135,147 @@ const InvoiceChat: React.FC<InvoiceChatProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <ChatBubbleLeftRightIcon className="w-6 h-6 text-primary-600 mr-2" />
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800">Chat with Invoice</h2>
-              <p className="text-sm text-gray-600">{invoiceName}</p>
-            </div>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[80vh] flex">
+        {/* Suggested Questions Sidebar */}
+        <div className="w-80 border-r border-gray-200 flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800">💡 Suggested Questions</h3>
+            <p className="text-sm text-gray-600 mt-1">Click to ask about this invoice</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
+          
+          {/* Questions List */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {isLoadingQuestions ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+                <span className="ml-2 text-sm text-gray-600">Loading questions...</span>
+              </div>
+            ) : suggestedQuestions.length > 0 ? (
+              <div className="space-y-2">
+                {suggestedQuestions.map((question, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestedQuestion(question)}
+                    className="w-full text-left p-3 text-sm text-gray-700 hover:text-primary-600 hover:bg-primary-50 rounded-lg border border-gray-200 hover:border-primary-200 transition-all duration-200"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-sm">No suggested questions available</div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`flex max-w-[80%] ${message.isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  message.isUser 
-                    ? 'bg-primary-600 text-white ml-2' 
-                    : 'bg-gray-200 text-gray-600 mr-2'
-                }`}>
-                  {message.isUser ? (
-                    <UserIcon className="w-4 h-4" />
-                  ) : (
-                    <ComputerDesktopIcon className="w-4 h-4" />
-                  )}
-                </div>
-                <div className={`rounded-lg px-4 py-2 ${
-                  message.isUser
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  <div className="whitespace-pre-wrap text-sm">{message.text}</div>
-                  <div className={`text-xs mt-1 ${
-                    message.isUser ? 'text-primary-100' : 'text-gray-500'
-                  }`}>
-                    {message.timestamp.toLocaleTimeString()}
-                  </div>
-                </div>
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <div className="flex items-center">
+              <ChatBubbleLeftRightIcon className="w-6 h-6 text-primary-600 mr-2" />
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Chat with Invoice</h2>
+                <p className="text-sm text-gray-600">{invoiceName}</p>
               </div>
             </div>
-          ))}
-          
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="flex max-w-[80%]">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 mr-2 flex items-center justify-center">
-                  <ComputerDesktopIcon className="w-4 h-4" />
-                </div>
-                <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-2">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
-                    <span className="text-sm text-gray-600">Thinking...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="border-t border-gray-200 p-4">
-          <div className="flex space-x-2">
-            <textarea
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask a question about this invoice..."
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-              rows={1}
-              disabled={isLoading}
-            />
             <button
-              onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isLoading}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <PaperAirplaneIcon className="w-5 h-5" />
+              <XMarkIcon className="w-6 h-6" />
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Press Enter to send, Shift+Enter for new line
-          </p>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`flex max-w-[80%] ${message.isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    message.isUser 
+                      ? 'bg-primary-600 text-white ml-2' 
+                      : 'bg-gray-200 text-gray-600 mr-2'
+                  }`}>
+                    {message.isUser ? (
+                      <UserIcon className="w-4 h-4" />
+                    ) : (
+                      <ComputerDesktopIcon className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className={`rounded-lg px-4 py-2 ${
+                    message.isUser
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <div className="whitespace-pre-wrap text-sm">{message.text}</div>
+                    <div className={`text-xs mt-1 ${
+                      message.isUser ? 'text-primary-100' : 'text-gray-500'
+                    }`}>
+                      {message.timestamp.toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="flex max-w-[80%]">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 mr-2 flex items-center justify-center">
+                    <ComputerDesktopIcon className="w-4 h-4" />
+                  </div>
+                  <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                      <span className="text-sm text-gray-600">Thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-gray-200 p-4">
+            <div className="flex space-x-2">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask a question about this invoice..."
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                rows={1}
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputMessage.trim() || isLoading}
+                className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <PaperAirplaneIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
         </div>
       </div>
     </div>
