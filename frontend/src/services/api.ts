@@ -1,13 +1,11 @@
 import axios from 'axios';
-import type { Invoice, InvoiceDetail } from '../types';
+import type { Invoice, InvoiceDetail, ChatMessage, ChatResponse } from '../types';
 
 const API_BASE_URL = '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 60000, // Increased to 60 seconds for chat requests
 });
 
 export const invoiceApi = {
@@ -46,6 +44,26 @@ export const invoiceApi = {
   deleteAllInvoices: async (): Promise<{ message: string }> => {
     const response = await api.delete('/invoices/');
     return response.data;
+  },
+
+  // Chat with invoice
+  chatWithInvoice: async (message: string, invoiceId: number): Promise<ChatResponse> => {
+    try {
+      console.log('Sending chat request:', { message, invoiceId });
+      const response = await api.post('/chat/', {
+        message,
+        invoice_id: invoiceId,
+      });
+      console.log('Chat response received:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Chat API error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Response data:', error.response?.data);
+        console.error('Response status:', error.response?.status);
+      }
+      throw error;
+    }
   },
 };
 

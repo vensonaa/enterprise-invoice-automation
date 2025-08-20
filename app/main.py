@@ -7,12 +7,12 @@ import json
 import os
 import shutil
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 import uvicorn
 
 from app.database import get_db, Invoice
 from app.database import SessionLocal
-from app.langgraph_workflow import extract_invoice_data
+from app.langgraph_workflow import extract_invoice_data, chat_with_invoice
 from pydantic import BaseModel
 
 app = FastAPI(title="Invoice Automation API", version="1.0.0")
@@ -67,6 +67,15 @@ class InvoiceDetailResponse(BaseModel):
     processing_time: float | None = None
     confidence_score: float | None = None
     extraction_method: str | None = None
+
+class ChatMessage(BaseModel):
+    message: str
+    invoice_id: int
+
+class ChatResponse(BaseModel):
+    response: str
+    invoice_id: int
+    timestamp: datetime
 
 @app.on_event("startup")
 def mark_stale_processing_invoices():
@@ -317,6 +326,33 @@ async def delete_all_invoices(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete invoices: {str(e)}")
+
+
+@app.post("/chat/", response_model=ChatResponse)
+async def chat_with_invoice_endpoint(chat_message: ChatMessage, db: Session = Depends(get_db)):
+    """Chat with a specific invoice to ask questions about its content."""
+    # Get the invoice
+    invoice = db.query(Invoice).filter(Invoice.id == chat_message.invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    if invoice.status != "completed":
+        raise HTTPException(status_code=400, detail="Invoice processing not completed. Please wait for processing to finish.")
+    
+    # Parse the extracted data
+    try:
+        extracted_data = json.loads(invoice.extracted_data) if invoice.extracted_data else {}
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid invoice data format")
+    
+    # Get AI response
+    ai_response = chat_with_invoice(extracted_data, chat_message.message)
+    
+    return ChatResponse(
+        response=ai_response,
+        invoice_id=chat_message.invoice_id,
+        timestamp=datetime.utcnow()
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():

@@ -5,7 +5,8 @@ import {
   ClockIcon, 
   ExclamationTriangleIcon,
   EyeIcon,
-  TrashIcon
+  TrashIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import type { Invoice } from '../types';
 
@@ -13,9 +14,10 @@ interface InvoiceCardProps {
   invoice: Invoice;
   onClick: () => void;
   onDelete?: (id: number) => void;
+  onChat?: (id: number) => void;
 }
 
-const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete }) => {
+const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete, onChat }) => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -72,6 +74,13 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete })
     }
   };
 
+  const handleChat = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onChat) {
+      onChat(invoice.id);
+    }
+  };
+
   // Check if totals match (for completed invoices)
   const validation = invoice.extracted_data?.validation;
   const totalsMatch = validation?.totals_match ?? true;
@@ -82,16 +91,30 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete })
       className="card hover:shadow-lg transition-all duration-200 cursor-pointer group relative"
       onClick={onClick}
     >
-      {/* Delete Button */}
-      {onDelete && (
-        <button
-          onClick={handleDelete}
-          className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-          title="Delete invoice"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </button>
-      )}
+      {/* Action Buttons */}
+      <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Chat Button - only for completed invoices */}
+        {invoice.status === 'completed' && onChat && (
+          <button
+            onClick={handleChat}
+            className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors"
+            title="Chat with invoice"
+          >
+            <ChatBubbleLeftRightIcon className="w-4 h-4" />
+          </button>
+        )}
+        
+        {/* Delete Button */}
+        {onDelete && (
+          <button
+            onClick={handleDelete}
+            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            title="Delete invoice"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
       {/* Validation Warning */}
       {invoice.status === 'completed' && !totalsMatch && (

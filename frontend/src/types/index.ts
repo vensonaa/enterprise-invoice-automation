@@ -2,26 +2,27 @@ export interface Invoice {
   id: number;
   filename: string;
   upload_date: string;
-  status: 'processing' | 'completed' | 'failed';
-  invoice_number: string | null;
-  invoice_date: string | null;
-  vendor_name: string | null;
-  total_amount: number | null;
-  currency: string | null;
-  confidence_score: number | null;
+  status: string;
+  invoice_number?: string | null;
+  invoice_date?: string | null;
+  vendor_name?: string | null;
+  total_amount?: number | null;
+  currency?: string | null;
+  confidence_score?: number | null;
+  extracted_data?: any; // Add this field for validation data
 }
 
 export interface InvoiceDetail extends Invoice {
-  due_date: string | null;
-  vendor_address: string | null;
-  customer_name: string | null;
-  customer_address: string | null;
-  subtotal: number | null;
-  tax_amount: number | null;
-  line_items: string | null;
-  processing_time: number | null;
-  extraction_method: string | null;
-  extracted_data: Record<string, any>;
+  due_date?: string | null;
+  vendor_address?: string | null;
+  customer_name?: string | null;
+  customer_address?: string | null;
+  subtotal?: number | null;
+  tax_amount?: number | null;
+  line_items?: string | null;
+  processing_time?: number | null;
+  extraction_method?: string | null;
+  extracted_data: any;
 }
 
 export interface LineItem {
@@ -49,6 +50,16 @@ export interface DashboardStats {
 export interface ProcessingStep {
   name: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number;
   message: string;
+}
+
+export interface ChatMessage {
+  message: string;
+  invoice_id: number;
+}
+
+export interface ChatResponse {
+  response: string;
+  invoice_id: number;
+  timestamp: string;
 }

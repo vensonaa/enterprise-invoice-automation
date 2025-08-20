@@ -14,6 +14,7 @@ import type { Invoice, DashboardStats, UploadProgress } from '../types';
 import UploadArea from './UploadArea';
 import InvoiceCard from './InvoiceCard';
 import InvoiceModal from './InvoiceModal';
+import InvoiceChat from './InvoiceChat';
 import StatsCards from './StatsCards';
 import ProcessingSteps from './ProcessingSteps';
 
@@ -24,6 +25,8 @@ const Dashboard: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [chatInvoice, setChatInvoice] = useState<Invoice | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalInvoices: 0,
     completedInvoices: 0,
@@ -177,6 +180,19 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleChat = (invoiceId: number) => {
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (invoice) {
+      setChatInvoice(invoice);
+      setIsChatOpen(true);
+    }
+  };
+
+  const handleCloseChat = () => {
+    setIsChatOpen(false);
+    setChatInvoice(null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -263,6 +279,7 @@ const Dashboard: React.FC = () => {
                   invoice={invoice}
                   onClick={() => handleInvoiceClick(invoice)}
                   onDelete={handleDeleteInvoice}
+                  onChat={handleChat}
                 />
               ))}
             </div>
@@ -279,6 +296,16 @@ const Dashboard: React.FC = () => {
             setIsModalOpen(false);
             setSelectedInvoice(null);
           }}
+        />
+      )}
+
+      {/* Invoice Chat Modal */}
+      {chatInvoice && (
+        <InvoiceChat
+          invoiceId={chatInvoice.id}
+          invoiceName={chatInvoice.filename}
+          isOpen={isChatOpen}
+          onClose={handleCloseChat}
         />
       )}
     </div>

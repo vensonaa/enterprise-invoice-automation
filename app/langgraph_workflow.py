@@ -430,3 +430,53 @@ def extract_invoice_data(filename: str) -> Dict[str, Any]:
             "confidence_scores": {},
             "processing_time": 0.0
         }
+
+
+def chat_with_invoice(invoice_data: Dict[str, Any], user_question: str) -> str:
+    """Chat with an invoice using Groq to answer questions about the invoice content"""
+    try:
+        # Prepare the context with invoice data
+        invoice_context = {
+            "invoice_number": invoice_data.get("invoice_number"),
+            "invoice_date": invoice_data.get("invoice_date"),
+            "due_date": invoice_data.get("due_date"),
+            "vendor_name": invoice_data.get("vendor_name"),
+            "vendor_address": invoice_data.get("vendor_address"),
+            "customer_name": invoice_data.get("customer_name"),
+            "customer_address": invoice_data.get("customer_address"),
+            "subtotal": invoice_data.get("subtotal"),
+            "tax_amount": invoice_data.get("tax_amount"),
+            "total_amount": invoice_data.get("total_amount"),
+            "currency": invoice_data.get("currency"),
+            "line_items": invoice_data.get("line_items", [])
+        }
+        
+        system_prompt = """You are an expert invoice analyst assistant. You have access to detailed invoice data and can answer questions about:
+        - Invoice details (number, dates, amounts)
+        - Vendor and customer information
+        - Line items and their details
+        - Financial calculations and summaries
+        - Payment terms and conditions
+        - Any discrepancies or issues found
+        
+        Provide clear, accurate, and helpful responses based on the invoice data provided. If information is not available in the data, clearly state that.
+        
+        Format your response in a conversational but professional manner."""
+        
+        context_prompt = f"""Invoice Data:
+        {json.dumps(invoice_context, indent=2)}
+        
+        User Question: {user_question}
+        
+        Please analyze the invoice data and provide a comprehensive answer to the user's question."""
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=context_prompt)
+        ]
+        
+        response = groq_client.invoke(messages)
+        return response.content
+        
+    except Exception as e:
+        return f"Sorry, I encountered an error while processing your question: {str(e)}. Please try again."
