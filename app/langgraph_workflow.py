@@ -263,11 +263,66 @@ def extract_line_items(state: InvoiceState) -> InvoiceState:
 def validate_and_enhance_data(state: InvoiceState) -> InvoiceState:
     """Validate and enhance extracted data"""
     try:
+        # Calculate line items total
+        line_items = state.extracted_data.get("line_items", [])
+        calculated_total = 0.0
+        
+        if line_items and isinstance(line_items, list):
+            for item in line_items:
+                if isinstance(item, dict):
+                    # Try different possible keys for total price
+                    total_price = item.get("total_price") or item.get("Total Price") or item.get("amount") or item.get("Amount") or 0.0
+                    if isinstance(total_price, str):
+                        # Remove currency symbols and commas
+                        total_price = str(total_price).replace('$', '').replace(',', '').replace('£', '').replace('€', '')
+                        try:
+                            total_price = float(total_price)
+                        except (ValueError, TypeError):
+                            total_price = 0.0
+                    elif isinstance(total_price, (int, float)):
+                        total_price = float(total_price)
+                    else:
+                        total_price = 0.0
+                    
+                    calculated_total += total_price
+        
+        # Get extracted total amount
+        extracted_total = state.extracted_data.get("total_amount", 0.0)
+        if isinstance(extracted_total, str):
+            extracted_total = str(extracted_total).replace('$', '').replace(',', '').replace('£', '').replace('€', '')
+            try:
+                extracted_total = float(extracted_total)
+            except (ValueError, TypeError):
+                extracted_total = 0.0
+        elif not isinstance(extracted_total, (int, float)):
+            extracted_total = 0.0
+        
+        # Check if totals match (allow for small rounding differences)
+        tolerance = 0.01  # $0.01 tolerance
+        totals_match = abs(calculated_total - extracted_total) <= tolerance
+        
+        if not totals_match and calculated_total > 0:
+            print(f"Total amount mismatch detected:")
+            print(f"  Extracted total: {extracted_total}")
+            print(f"  Calculated from line items: {calculated_total}")
+            print(f"  Difference: {abs(calculated_total - extracted_total)}")
+            
+            # Auto-correct the total amount
+            state.extracted_data["total_amount"] = calculated_total
+            print(f"  Auto-corrected total to: {calculated_total}")
+            
+            # Also update subtotal if it's missing or incorrect
+            if not state.extracted_data.get("subtotal") or state.extracted_data.get("subtotal") == 0.0:
+                state.extracted_data["subtotal"] = calculated_total
+                print(f"  Updated subtotal to: {calculated_total}")
+        
+        # Use Groq for additional validation and enhancement
         system_prompt = """You are an expert invoice data validator. Review the extracted data and:
         1. Validate data consistency
         2. Fill in missing fields if possible
         3. Calculate confidence scores
         4. Suggest improvements
+        5. Ensure line items total matches invoice total
         
         Return ONLY a JSON object with validation results and enhanced data. Do not include any explanatory text."""
         
@@ -293,6 +348,15 @@ def validate_and_enhance_data(state: InvoiceState) -> InvoiceState:
             confidences = list(state.confidence_scores.values())
             state.confidence_scores["overall"] = sum(confidences) / len(confidences) if confidences else 0.5
             print(f"Validation fallback: {e}")
+        
+        # Add validation metadata
+        state.extracted_data["validation"] = {
+            "totals_match": totals_match,
+            "extracted_total": extracted_total,
+            "calculated_total": calculated_total,
+            "difference": abs(calculated_total - extracted_total),
+            "auto_corrected": not totals_match and calculated_total > 0
+        }
         
         state.status = "completed"
         return state

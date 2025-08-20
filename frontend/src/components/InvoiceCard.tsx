@@ -72,6 +72,11 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete })
     }
   };
 
+  // Check if totals match (for completed invoices)
+  const validation = invoice.extracted_data?.validation;
+  const totalsMatch = validation?.totals_match ?? true;
+  const wasAutoCorrected = validation?.auto_corrected ?? false;
+
   return (
     <div 
       className="card hover:shadow-lg transition-all duration-200 cursor-pointer group relative"
@@ -86,6 +91,20 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete })
         >
           <TrashIcon className="w-4 h-4" />
         </button>
+      )}
+
+      {/* Validation Warning */}
+      {invoice.status === 'completed' && !totalsMatch && (
+        <div className="absolute top-2 left-2 p-1 bg-yellow-100 text-yellow-800 rounded-full">
+          <ExclamationTriangleIcon className="w-4 h-4" title="Total amount doesn't match line items" />
+        </div>
+      )}
+
+      {/* Auto-corrected Indicator */}
+      {wasAutoCorrected && (
+        <div className="absolute top-2 left-2 p-1 bg-blue-100 text-blue-800 rounded-full">
+          <CheckCircleIcon className="w-4 h-4" title="Total amount was auto-corrected" />
+        </div>
       )}
 
       {/* Header */}
@@ -125,8 +144,9 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onClick, onDelete })
         {invoice.total_amount !== null && (
           <div className="flex justify-between">
             <span className="font-medium">Total:</span>
-            <span className="font-semibold text-gray-800">
+            <span className={`font-semibold ${!totalsMatch ? 'text-yellow-600' : 'text-gray-800'}`}>
               {formatCurrency(invoice.total_amount, invoice.currency)}
+              {!totalsMatch && <span className="ml-1 text-xs">⚠️</span>}
             </span>
           </div>
         )}
