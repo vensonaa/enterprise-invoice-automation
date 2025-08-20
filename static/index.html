@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Automation - GEN AI Solution</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .status-processing {
+            background: linear-gradient(45deg, #fbbf24, #f59e0b);
+        }
+        .status-completed {
+            background: linear-gradient(45deg, #10b981, #059669);
+        }
+        .status-failed {
+            background: linear-gradient(45deg, #ef4444, #dc2626);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // Main App Component
+        function App() {
+            const [invoices, setInvoices] = useState([]);
+            const [selectedInvoice, setSelectedInvoice] = useState(null);
+            const [isUploading, setIsUploading] = useState(false);
+            const [uploadProgress, setUploadProgress] = useState(0);
+            const [showModal, setShowModal] = useState(false);
+            
+            // Fetch invoices on component mount
+            useEffect(() => {
+                fetchInvoices();
+                // Poll for updates every 5 seconds
+                const interval = setInterval(fetchInvoices, 5000);
+                return () => clearInterval(interval);
+            }, []);
+            
+            const fetchInvoices = async () => {
+                try {
+                    const response = await axios.get('/invoices/');
+                    setInvoices(response.data);
+                } catch (error) {
+                    console.error('Error fetching invoices:', error);
+                }
+            };
+            
+            const handleFileUpload = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                if (!file.name.toLowerCase().endsWith('.pdf')) {
+                    alert('Please select a PDF file');
+                    return;
+                }
+                
+                setIsUploading(true);
+                setUploadProgress(0);
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    // Simulate upload progress
+                    const progressInterval = setInterval(() => {
+                        setUploadProgress(prev => {
+                            if (prev >= 90) {
+                                clearInterval(progressInterval);
+                                return 90;
+                            }
+                            return prev + 10;
+                        });
+                    }, 200);
+                    
+                    const response = await axios.post('/upload-invoice/', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                    
+                    clearInterval(progressInterval);
+                    setUploadProgress(100);
+                    
+                    // Add new invoice to list
+                    setInvoices(prev => [response.data, ...prev]);
+                    
+                    setTimeout(() => {
+                        setIsUploading(false);
+                        setUploadProgress(0);
+                        event.target.value = '';
+                    }, 1000);
+                    
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    alert('Upload failed. Please try again.');
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                }
+            };
+            
+            const viewInvoiceDetail = async (invoiceId) => {
+                try {
+                    const response = await axios.get(`/invoices/${invoiceId}`);
+                    setSelectedInvoice(response.data);
+                    setShowModal(true);
+                } catch (error) {
+                    console.error('Error fetching invoice details:', error);
+                }
+            };
+            
+            const getStatusColor = (status) => {
+                switch (status) {
+                    case 'processing': return 'status-processing';
+                    case 'completed': return 'status-completed';
+                    case 'failed': return 'status-failed';
+                    default: return 'bg-gray-500';
+                }
+            };
+            
+            const getStatusIcon = (status) => {
+                switch (status) {
+                    case 'processing': return 'fas fa-spinner fa-spin';
+                    case 'completed': return 'fas fa-check';
+                    case 'failed': return 'fas fa-times';
+                    default: return 'fas fa-question';
+                }
+            };
+            
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="gradient-bg text-white shadow-lg">
+                        <div className="container mx-auto px-6 py-8">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-4xl font-bold mb-2">
+                                        <i className="fas fa-robot mr-3"></i>
+                                        Invoice Automation
+                                    </h1>
+                                    <p className="text-xl opacity-90">
+                                        GEN AI Solution powered by Groq & LangGraph
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold">{invoices.length}</div>
+                                    <div className="text-sm opacity-75">Invoices Processed</div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+                    
+                    {/* Main Content */}
+                    <main className="container mx-auto px-6 py-8">
+                        {/* Upload Section */}
+                        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+                            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                                <i className="fas fa-upload mr-2"></i>
+                                Upload Invoice
+                            </h2>
+                            
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                                <input
+                                    type="file"
+                                    accept=".pdf"
+                                    onChange={handleFileUpload}
+                                    disabled={isUploading}
+                                    className="hidden"
+                                    id="file-upload"
+                                />
+                                <label htmlFor="file-upload" className="cursor-pointer">
+                                    <div className="text-6xl text-gray-400 mb-4">
+                                        <i className="fas fa-file-pdf"></i>
+                                    </div>
+                                    <div className="text-xl font-semibold text-gray-700 mb-2">
+                                        {isUploading ? 'Processing...' : 'Drop your PDF invoice here'}
+                                    </div>
+                                    <div className="text-gray-500">
+                                        {isUploading ? 'AI is extracting data...' : 'or click to browse'}
+                                    </div>
+                                </label>
+                                
+                                {isUploading && (
+                                    <div className="mt-6">
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                                style={{ width: `${uploadProgress}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="text-sm text-gray-600 mt-2">
+                                            {uploadProgress}% Complete
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Invoices List */}
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <h2 className="text-2xl font-bold mb-6 text-gray-800">
+                                <i className="fas fa-list mr-2"></i>
+                                Processed Invoices
+                            </h2>
+                            
+                            {invoices.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <div className="text-6xl text-gray-300 mb-4">
+                                        <i className="fas fa-inbox"></i>
+                                    </div>
+                                    <div className="text-xl text-gray-600">
+                                        No invoices processed yet
+                                    </div>
+                                    <div className="text-gray-500 mt-2">
+                                        Upload your first invoice to get started
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                                    {invoices.map((invoice) => (
+                                        <div 
+                                            key={invoice.id}
+                                            className="card-hover bg-white border border-gray-200 rounded-lg p-6 cursor-pointer"
+                                            onClick={() => viewInvoiceDetail(invoice.id)}
+                                        >
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="text-2xl text-gray-400">
+                                                    <i className="fas fa-file-invoice"></i>
+                                                </div>
+                                                <div className={`px-3 py-1 rounded-full text-white text-sm font-semibold ${getStatusColor(invoice.status)}`}>
+                                                    <i className={`${getStatusIcon(invoice.status)} mr-1`}></i>
+                                                    {invoice.status}
+                                                </div>
+                                            </div>
+                                            
+                                            <h3 className="font-semibold text-gray-800 mb-2 truncate">
+                                                {invoice.filename}
+                                            </h3>
+                                            
+                                            <div className="space-y-2 text-sm text-gray-600">
+                                                {invoice.invoice_number && (
+                                                    <div>
+                                                        <span className="font-medium">Invoice #:</span> {invoice.invoice_number}
+                                                    </div>
+                                                )}
+                                                {invoice.vendor_name && (
+                                                    <div>
+                                                        <span className="font-medium">Vendor:</span> {invoice.vendor_name}
+                                                    </div>
+                                                )}
+                                                {invoice.total_amount && (
+                                                    <div>
+                                                        <span className="font-medium">Total:</span> {invoice.currency} {invoice.total_amount.toFixed(2)}
+                                                    </div>
+                                                )}
+                                                {invoice.confidence_score && (
+                                                    <div>
+                                                        <span className="font-medium">Confidence:</span> {(invoice.confidence_score * 100).toFixed(1)}%
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="mt-4 text-xs text-gray-500">
+                                                {new Date(invoice.upload_date).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                    
+                    {/* Invoice Detail Modal */}
+                    {showModal && selectedInvoice && (
+                        <InvoiceDetailModal 
+                            invoice={selectedInvoice} 
+                            onClose={() => setShowModal(false)} 
+                        />
+                    )}
+                </div>
+            );
+        }
+        
+        // Invoice Detail Modal Component
+        function InvoiceDetailModal({ invoice, onClose }) {
+            const [activeTab, setActiveTab] = useState('overview');
+            
+            const formatCurrency = (amount, currency = 'USD') => {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency
+                }).format(amount || 0);
+            };
+            
+            const getConfidenceColor = (score) => {
+                if (score >= 0.8) return 'text-green-600';
+                if (score >= 0.6) return 'text-yellow-600';
+                return 'text-red-600';
+            };
+            
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b">
+                            <h2 className="text-2xl font-bold text-gray-800">
+                                Invoice Details
+                            </h2>
+                            <button 
+                                onClick={onClose}
+                                className="text-gray-500 hover:text-gray-700 text-2xl"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        {/* Modal Content */}
+                        <div className="p-6">
+                            {/* Tabs */}
+                            <div className="flex border-b mb-6">
+                                {['overview', 'details', 'line-items', 'raw-data'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-4 py-2 font-medium capitalize ${
+                                            activeTab === tab 
+                                                ? 'text-blue-600 border-b-2 border-blue-600' 
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {tab.replace('-', ' ')}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            {/* Tab Content */}
+                            {activeTab === 'overview' && (
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-gray-800 mb-2">Basic Information</h3>
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="font-medium">Invoice #:</span> {invoice.invoice_number || 'N/A'}</div>
+                                                <div><span className="font-medium">Date:</span> {invoice.invoice_date || 'N/A'}</div>
+                                                <div><span className="font-medium">Due Date:</span> {invoice.due_date || 'N/A'}</div>
+                                                <div><span className="font-medium">Status:</span> 
+                                                    <span className={`ml-2 px-2 py-1 rounded text-white text-xs ${getStatusColor(invoice.status)}`}>
+                                                        {invoice.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-gray-800 mb-2">Vendor Information</h3>
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="font-medium">Name:</span> {invoice.vendor_name || 'N/A'}</div>
+                                                <div><span className="font-medium">Address:</span> {invoice.vendor_address || 'N/A'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-gray-800 mb-2">Financial Summary</h3>
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="font-medium">Subtotal:</span> {formatCurrency(invoice.subtotal, invoice.currency)}</div>
+                                                <div><span className="font-medium">Tax:</span> {formatCurrency(invoice.tax_amount, invoice.currency)}</div>
+                                                <div className="text-lg font-bold text-blue-600">
+                                                    <span className="font-medium">Total:</span> {formatCurrency(invoice.total_amount, invoice.currency)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-gray-800 mb-2">Processing Information</h3>
+                                            <div className="space-y-2 text-sm">
+                                                <div><span className="font-medium">Processing Time:</span> {invoice.processing_time?.toFixed(2)}s</div>
+                                                <div><span className="font-medium">Confidence Score:</span> 
+                                                    <span className={getConfidenceColor(invoice.confidence_score)}>
+                                                        {(invoice.confidence_score * 100)?.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                                <div><span className="font-medium">Method:</span> {invoice.extraction_method || 'N/A'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {activeTab === 'details' && (
+                                <div className="space-y-6">
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <h3 className="font-semibold text-gray-800 mb-3">Customer Information</h3>
+                                        <div className="space-y-2 text-sm">
+                                            <div><span className="font-medium">Name:</span> {invoice.customer_name || 'N/A'}</div>
+                                            <div><span className="font-medium">Address:</span> {invoice.customer_address || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <h3 className="font-semibold text-gray-800 mb-3">Vendor Information</h3>
+                                        <div className="space-y-2 text-sm">
+                                            <div><span className="font-medium">Name:</span> {invoice.vendor_name || 'N/A'}</div>
+                                            <div><span className="font-medium">Address:</span> {invoice.vendor_address || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {activeTab === 'line-items' && (
+                                <div>
+                                    <h3 className="font-semibold text-gray-800 mb-4">Line Items</h3>
+                                    {invoice.line_items ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full bg-white border border-gray-200">
+                                                <thead>
+                                                    <tr className="bg-gray-50">
+                                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Description</th>
+                                                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">Quantity</th>
+                                                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">Unit Price</th>
+                                                        <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">Total</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {JSON.parse(invoice.line_items).map((item, index) => (
+                                                        <tr key={index} className="border-t border-gray-200">
+                                                            <td className="px-4 py-2 text-sm">{item.description || 'N/A'}</td>
+                                                            <td className="px-4 py-2 text-sm text-right">{item.quantity || 'N/A'}</td>
+                                                            <td className="px-4 py-2 text-sm text-right">{formatCurrency(item.unit_price, invoice.currency)}</td>
+                                                            <td className="px-4 py-2 text-sm text-right font-medium">{formatCurrency(item.total_price, invoice.currency)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-gray-500">
+                                            No line items found
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {activeTab === 'raw-data' && (
+                                <div>
+                                    <h3 className="font-semibold text-gray-800 mb-4">Raw Extracted Data</h3>
+                                    <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto">
+                                        <pre className="text-sm">
+                                            {JSON.stringify(invoice.extracted_data, null, 2)}
+                                        </pre>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
